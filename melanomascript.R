@@ -1,147 +1,58 @@
----
-title: "Making Predictions - Answers!"
-author: "Abhishek Bhatia"
-date: "2023-07-27"
-output: html_document
----
+# 1. SETUP ----
+## Set working directories ----
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
-# Hospital ICU dataset
-Today, we will be building a model to predict hospital death based on data from an intensive care unit (ICU). Predicting patient death in the ICU is extremely important because determining which patients needs attention immediately can help to prioritize care in a way that prevents as many deaths as possible. 
-
-## Load the `tidyverse` library
-```{r}
-# Load the tidyverse library
+## Load in libraries ----
 library(tidyverse)
+library(janitor)
+library(randomForest)
+library(haven)
 
-```
+# 2. DATA CLEANING ----
+## Read in in the dataset ----
+df <- read_sav("SPARK Data.sav")
 
+## Drop NAs ----
+df <- df %>% filter(!is.na(adult_fg_so))
 
-## Read in in the dataset
-The hospital dataset is uploaded to Github, and can be found at https://raw.githubusercontent.com/e-cui/ENABLE-HiDAV-Online-Modules/master/Data%20Mining%20Modules/csv_files/t.csv
+## Cleaning the data, drop NA rows
+df <- df %>% select(-checked_6_month_other47, -adult_religion6_other, -adult_fg_so, -child_under_18_relation12___1)
+df <- drop_na(df)
 
-1. Assign the url (in quotations, because it is a string) to an object called `urlfile`. 
-2. Next, use the `read_csv()` function to read in the csv. Within `read_csv()`, you can specify urls as `read_csv(url(...))`. Read in the csv, and name that dataset
-3. Use `head()` to peek at the data
-
-```{r}
-#The hospital dataset is uploaded to Github, and can be found at https://raw.githubusercontent.com/e-cui/ENABLE-HiDAV-Online-Modules/master/Data%20Mining%20Modules/csv_files/t.csv
-
-#1. Assign the url (in quotations, because it is a string) to an object called `urlfile`. 
-#2. Next, use the `read_csv()` function to read in the csv. Within `read_csv()`, you can specify urls as `read_csv(url(...))`. Read in the csv, and name that dataset
-#3. Use `head()` to peek at the data
-
-urlfile <- "https://raw.githubusercontent.com/e-cui/ENABLE-HiDAV-Online-Modules/master/Data%20Mining%20Modules/csv_files/t.csv"
-df <- read_csv(url(urlfile))
-
-head(df)
-```
+## Format variables ----
+## Of the six child protective behaviors, create a new column using `mutate`
+df <- df %>% mutate(total = rowSums(select(., where(is.numeric))))
 
 
+## new column should be a total of the number of behaviors taken up by the child
+## This will be your outcome/y variable
+## Make sure your count is a factor
 
+# 3. MODELING ----
 
-
-
-## Cleaning the data
-
-We will need to change the variable types, since CSV files don't tell you what type of variable is contained in the data.
-
-Next, convert the following variables to a factor, using `mutate()` along with `as.factor`:
-- hospital_death
-- sepsis
-- cardiovascular_diagnosis
-- intubated_apache
-- gcs_eyes_apache
-- gcs_motor_apache
-
-Also, convert the following variables to numeric:
-- temp_apache
-- map_apache
-- h1_heartrate_max
-- d1_resprate_max
-- d1_potassium_max
-- d1_creatinine_max
-- d1_hematocrit_max
-- sodium_apache
-- wbc_apache
-- age
-- pre_icu_los_days
-- bmi
-
-
-```{r}
-df <- df %>%
-  mutate(hospital_death = as.factor(hospital_death)) %>%
-  mutate(sepsis = as.factor(sepsis)) %>%
-  mutate(cardiovascular_diagnosis = as.factor(cardiovascular_diagnosis)) %>%
-  mutate(intubated_apache = as.factor(intubated_apache)) %>%
-  mutate(gcs_eyes_apache = as.factor(gcs_eyes_apache)) %>%
-  mutate(gcs_motor_apache = as.factor(gcs_motor_apache)) %>%
-  mutate(temp_apache = as.numeric(temp_apache)) %>%
-  mutate(map_apache = as.numeric(map_apache)) %>%
-  mutate(h1_heartrate_max = as.numeric(h1_heartrate_max)) %>%
-  mutate(d1_resprate_max = as.numeric(d1_resprate_max)) %>%
-  mutate(d1_potassium_max = as.numeric(d1_potassium_max)) %>%
-  mutate(d1_creatinine_max = as.numeric(d1_creatinine_max)) %>%
-  mutate(d1_hematocrit_max = as.numeric(d1_hematocrit_max)) %>%
-  mutate(sodium_apache = as.numeric(sodium_apache)) %>%
-  mutate(wbc_apache = as.numeric(wbc_apache)) %>%
-  mutate(age = as.numeric(age)) %>%
-  mutate(pre_icu_los_days = as.numeric(pre_icu_los_days)) %>%
-  mutate(bmi = as.numeric(bmi))
-
-```
-
-
-## Split data into training and testing datasets
-- Splitting the data in this manner is important because the model must be tested on data that it has never seen before. 
-- When splitting the data the training set should be larger than the testing to allow for more accurate predictions.
-
-### 1. Set a seed
-When you generate “random numbers” in R, you are actually generating pseudorandom numbers. These numbers are generated with an algorithm that requires a seed to initialize. Being pseudorandom instead of pure random means that, if you know the seed and the generator, you can predict (and reproduce) the output. In this tutorial you will learn the meaning of setting a seed, what does set.seed do in R, how does set.seed work, how to set or unset a seed, and hence, how to make reproducible outputs.
-
-
-```{r}
-# use set.seed() and set any random number as your see
+## Set a seed
 set.seed(666)
-```
 
-### 2. Split the dataset
-We will separate the data into 80:20, i.e. 80% of the data will be used to train the model, and 20% will be used to test it.
-
-```{r}
-# First, create a new column called "id" that corresponds to the row number. To do this, (assuming your dataset is called df), we can write "df$id <- 1:nrow(df)". This means, create a new id column in the dataset "df", starting from 1, till the number of rows in the dataframe df. Replicate this to create an id column for your datast
+## Split data into training and testing datasets ----
 df$id <- 1:nrow(df)
-```
-
-
-Next, we split the dataset. To do this, we will "randomly sample" 80% of the dataset, using `dplyr`, and assign the two datasets as "train" and test". An example of how you do this is:
-
-```
-train <- df %>% dplyr::sample_frac(0.70)
-test  <- dplyr::anti_join(df, train, by = 'id')
-```
-"Anti_join" tells R to only keep all of the rows in the dataset "df", that you did not sample in the "train" dataset, and it can figure this out by looking at the id numbers of the rows that you samples in "train". Replicate this for your dataset, with the correct sample fraction of 80%. 
-
-```{r}
-# Split the dataset into train and test
 train <- df %>% dplyr::sample_frac(0.70)
 test  <- dplyr::anti_join(df, train, by = 'id')
 
-```
+## Fit initial random forest model with your outcome being the new total variable ----
 
-For a random forest model, we also want to separate out all the x variables from the y variable in both the training and testing data. It requires the y variable to be a vector, and you can convert a dataframe to a vector using the `unlist()` function. Follow the steps below:
+## Tune model ----
 
-1. Create a dataframe `train_x` which is a subset of the `train` dataset, with all the columns except for `hospital death`. Do the same for the test dataset to create `test_x`
+## Fit final model ----
 
-2. Also create a dataframe `train_y` with only the `hospital_death` variable. Do the same for the test dataset to create `test_y` 
+## Check accuracy ----
 
-3. Convert the train and test `y` dataframes to a vector using `unlist()`. 
+# 4. FIGURES ----
 
-```{r}
+## Feature importance ----
+
+## Other descriptives ----
+## Once you know your important features, examine the distribution of variables on the y axis, and the x-axis is count of 
+
 # Train_x and test_x
 train_x <- train %>% select(-c("hospital_death", "id"))
 test_x <- test %>% select(-c("hospital_death", "id"))
