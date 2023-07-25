@@ -19,7 +19,8 @@ library(glmnet)
 
 # 2. DATA CLEANING ----
 ## Read in in the dataset ----
-df <- read_sav("SPARK Data.sav")
+df <- read_csv("MelanomaData.csv")
+View(df)
 
 ## Drop NAs ----
 df <- df %>% filter(!is.na(adult_fg_so))
@@ -208,13 +209,10 @@ summary(my_lm_model)
 # Lasso Regresssion Model
 
 ## Load in data
-set.seed(123)
-n <- 100
-p <- 5
+df <- read_csv('MelanomaData.csv')
 
-y <- df
-
-x <- data.matrix(df)
+y <- data.matrix(df[, c('Sum_Columns', 'total_sunburn')])
+x <- data.matrix(df[, -c('Sum_Columns', 'total_sunburn')])
 
 #perform k-fold cross-validation to find optimal lambda value
 cv_model <- cv.glmnet(x, y, alpha = 1)
