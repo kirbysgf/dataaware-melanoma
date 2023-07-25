@@ -1,12 +1,15 @@
 # 1. SETUP ----
 ## Set working directories ----
 
+## Install Packages
+install.packages("data.table")
+
 
 ## Load in libraries ----
 library(tidyverse)
-library(janitor)
 library(randomForest)
 library(haven)
+library(data.table)
 
 # 2. DATA CLEANING ----
 ## Read in in the dataset ----
@@ -16,17 +19,30 @@ df <- read_sav("SPARK Data.sav")
 df <- df %>% filter(!is.na(adult_fg_so))
 
 ## Cleaning the data, drop NA rows
-df <- df %>% select(-checked_6_month_other47, -adult_religion6_other, -adult_fg_so, -child_under_18_relation12___1)
-df <- drop_na(df)
+df <- df %>% select(-checked_6_month_other47, -adult_religion6_other, -adult_fg_so, -child_under_18_relation12___1, -checked_6_month_other47)
+
+df <- df %>%
+  mutate_if(is.numeric, ~if_else(is.na(.), 0, .))
+
+na_counts <- df %>%
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+print(na_counts)
 
 ## Format variables ----
-## Of the six child protective behaviors, create a new column using `mutate`
-df <- df %>% mutate(total = rowSums(select(., where(is.numeric))))
+## Of the six child protective behaviors, create a new column using `transmute`
+df <- df %>%
+  mutate(Protective_Barrier_Sum = rowSums(select(., starts_with("children_outdoors")), na.rm = TRUE))
 
+print(df)
 
 ## new column should be a total of the number of behaviors taken up by the child
 ## This will be your outcome/y variable
 ## Make sure your count is a factor
+df <- df %>%
+  mutate(children_barrier = Protective_Barrier_Sum$children_barrier)
+
+print(df)
 
 # 3. MODELING ----
 
