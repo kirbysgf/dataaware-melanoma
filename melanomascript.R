@@ -3,6 +3,9 @@
 
 ## Install Packages
 install.packages("data.table")
+install.packages("caret")
+install.packages("glmnet")
+
 
 
 ## Load in libraries ----
@@ -10,6 +13,9 @@ library(tidyverse)
 library(randomForest)
 library(haven)
 library(data.table)
+library(caret)
+library(readr)
+library(glmnet)
 
 # 2. DATA CLEANING ----
 ## Read in in the dataset ----
@@ -30,20 +36,83 @@ na_counts <- df %>%
 print(na_counts)
 
 ## Format variables ----
-## Of the six child protective behaviors, create a new column using `transmute`
-df <- df %>%
-  mutate(Protective_Barrier_Sum = rowSums(select(., starts_with("children_outdoors")), na.rm = TRUE))
-
-print(df)
-
+## Of the six child protective behaviors, create a new column using `mutate`
 ## new column should be a total of the number of behaviors taken up by the child
 ## This will be your outcome/y variable
 ## Make sure your count is a factor
 df <- df %>%
-  mutate(children_barrier = Protective_Barrier_Sum$children_barrier)
+  rowwise() %>%
+  mutate(Sum_Columns = sum(c_across(c(children_outdoors81, children_outdoors82, children_outdoors83, children_outdoors84, children_outdoors85, children_outdoors86, children_outdoors87, children_outdoors88))))
 
 print(df)
 
+## Viewing new Column
+column_data <- df$Sum_Columns
+print(column_data)
+
+## Save my_data_frame as a CSV file
+write_csv(df, path = "C:/Users/logan/Downloads/Melanoma/my_data.csv")
+
+## Make sure your count is a factor
+library(dplyr)
+
+# Assuming you have a data frame called 'df'
+
+# Convert selected variables to factors
+df <- df %>%
+  mutate(
+    across(c(
+      adult_gender2, adult_gender, adult_gender4, adult_gender5, adult_gender6, adult_gender7,
+      child_under_18_relation12___3, child_under_18_relation12___4, child_under_18_relation12___5,
+      child_under_18_relation12___6, child_under_18_relation12___7, child_relation_other12,
+      health_care_coverage14, outdoor31, outdoor32, outdoor33, outdoor34, outdoor35, outdoor36,
+      outdoor37, outdoor38, checked_your_skin_6_months47, children_outside_weekday79,
+      children_outside_weekend80, children_outdoors81, children_outdoors82, children_outdoors83,
+      children_outdoors84, children_outdoors85, children_outdoors86, children_outdoors87,
+      children_outdoors88, total_sunburn, children_check_skin92, checked_body_parts94___1,
+      checked_body_parts94___2, checked_body_parts94___3, checked_body_parts94___4,
+      checked_body_parts94___5, checked_body_parts94___6, checked_body_parts94___7,
+      checked_body_parts94___8, checked_body_parts94___9, checked_body_parts94___10,
+      checked_body_parts94___11, checked_body_parts94___12, checked_body_parts94___13,
+      checked_body_parts94___14, easy_difficult101, easy_difficult102, easy_difficult103,
+      easy_difficult104, easy_difficult105, easy_difficult106, easy_difficult107,
+      easy_difficult108, easy_difficult109, easy_difficult110, easy_difficult111,
+      easy_difficult112, affect_sunscreen115, affect_sunscreen116, affect_sunscreen117,
+      affect_sunscreen118, affect_sunscreen119, affect_sunscreen120, affect_sunscreen121,
+      affect_sunscreen122, affect_sunscreen123, affect_sunscreen124, affect_sunscreen125,
+      affect_sunscreen126, affect_sunscreen127, affect_sunscreen128, affect_outdoors131,
+      affect_outdoors132, affect_outdoors133, affect_outdoors134, affect_outdoors135,
+      affect_outdoors136, affect_outdoors137, affect_outdoors138, affect_outdoors139,
+      affect_outdoors140, affect_outdoors141, self_exams_children162, self_exams_children163,
+      self_exams_children164, self_exams_children165, self_exams_children166,
+      self_exams_children167, self_exams_children168, self_exams_children169,
+      self_exams_children170, self_exams_children171, self_exams_children172,
+      self_exams_children173, self_exams_children174, kid_gender, valid_pastsixmonths29,
+      total_body_sites_kidselfreport, total_body_sites_parentreportonkid,
+      checked_body_parts94___1, checked_body_parts94___2, checked_body_parts94___3,
+      checked_body_parts94___4, checked_body_parts94___5, checked_body_parts94___6,
+      checked_body_parts94___7, checked_body_parts94___8, checked_body_parts94___9,
+      checked_body_parts94___10, checked_body_parts94___11, checked_body_parts94___12,
+      checked_body_parts94___13, checked_body_parts94___14, protectiveclothing58,
+      protectiveclothing59, protectiveclothing60, protectiveclothing61, protectiveclothing62,
+      protectiveclothing63, protectiveclothing64, protectiveclothing65, protectiveclothing66,
+      protectiveclothing67, protectiveclothing68, protectiveclothing69, protectiveclothing70,
+      protectiveclothing71, sunscreen73, sunscreen74, sunscreen75, sunscreen76, sunscreen77,
+      sunscreen78, sunscreen79, sunscreen80, sunscreen81, sunscreen82, sunscreen83,
+      sunscreen84, sunscreen85, sunscreen86, avoidsun88, avoidsun89, avoidsun90, avoidsun91,
+      avoidsun92, avoidsun93, avoidsun94, avoidsun95, avoidsun96, avoidsun97, avoidsun98,
+      avoidsunelse, examining100, examining101, examining102, examining103, examining104,
+      examining105, examining106, examining107, examining108, examining109, examining110,
+      examining111, examining112, examining113, examiningelse, SHS38, SHS88
+    ), factor)
+  )
+
+# Convert to numeric
+df <- df %>%
+  mutate(
+    adult_age1 = as.numeric(adult_age1),
+    total_sunburn = as.numeric(total_sunburn)
+  )
 # 3. MODELING ----
 
 ## Set a seed
@@ -51,54 +120,23 @@ set.seed(666)
 
 ## Split data into training and testing datasets ----
 df$id <- 1:nrow(df)
+
 train <- df %>% dplyr::sample_frac(0.70)
 test  <- dplyr::anti_join(df, train, by = 'id')
 
-## Fit initial random forest model with your outcome being the new total variable ----
+## Train_x and test_x
+train_x <- train %>% select(-c("Sum_Columns", "id"))
+test_x <- test %>% select(-c("Sum_Columns", "id"))
 
-## Tune model ----
+## Train_y and test_y
+train_y <- train %>% select(c("Sum_Columns"))
+test_y <- test %>% select(c("Sum_Columns"))
 
-## Fit final model ----
-
-## Check accuracy ----
-
-# 4. FIGURES ----
-
-## Feature importance ----
-
-## Other descriptives ----
-## Once you know your important features, examine the distribution of variables on the y axis, and the x-axis is count of 
-
-# Train_x and test_x
-train_x <- train %>% select(-c("hospital_death", "id"))
-test_x <- test %>% select(-c("hospital_death", "id"))
-
-# Train_y and test_y
-train_y <- train %>% select(c("hospital_death"))
-test_y <- test %>% select(c("hospital_death"))
-
-# Convert train_y and test_y to a vector
+## Convert train_y and test_y to a vector
 train_y <- unlist(train_y)
 test_y <- unlist(test_y)
-
-```
-
-
-## Random Forest Model
-
-### 1. Train a simple model 
-
-Fit a randomforest model called `m1` that predicts hospital death.
-Reminder, we use the `lm()` function to fit linear regression models, and `glm()` function to fit logistic regression models.
-
-```{r}
-# load the randomForest library
-library(randomForest)
-```
-
-```{r}
-# fit a simple model with x = train_x, y = train_y, xtest = test_x, ytest = test_y, importance = TRUE, and ntree = 5000
-
+      
+## Fit initial random forest model with your outcome being the new total variable ----
 rf_model <- randomForest(
   x = train_x,
   y = train_y,
@@ -108,16 +146,7 @@ rf_model <- randomForest(
   ntree = 5000
 )
 
-```
-
-
-
-### 2. Model Tuning
-
-There are a few "hyperparameters" to tune, like the number of variables that each tree should consider during the learning process, which is called `mtry`. We can tune the model using the `tuneRF()` function in the `randomForest` package. 
-
-```{r}
-# find the best value for the mtry hyperparameter. Set the x, y, xtest, ytest as before. Set the ntreeTry value to 500 (it will build 500 trees per try), stepFactor to 1.5, improve = 0.01, trace = TRUE, and plot = TRUE 
+## Tune model ----
 mtry <- tuneRF(
   x = train_x,
   y = train_y,
@@ -135,28 +164,7 @@ best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
 print(mtry)
 print(best.m)
 
-```
-
-We can also tune the number of trees itself. The random forest model you fit earlier, rf_model should have an error rate associated with a certain number of trees after which the error stabilizes for some time. The code below will find the iteration with the lowest error rate, and save it as `best_nrounds`. 
-```{r}
-rf_res_df <-
-  data.frame(
-    TRAINING_ERROR = rf_model$err.rate[,1],
-    ITERATION = c(1:5000)
-  ) %>%
-  mutate(MIN = TRAINING_ERROR == min(TRAINING_ERROR))
-
-best_nrounds <- rf_res_df %>%
-  filter(MIN) %>%
-  pull(ITERATION)
-
-best_nrounds
-```
-
-
-Finally, fit your final model using the best `mtry` and `ntree` value you found
-
-```{r}
+## Fit final model ----
 rf_final_model <-
   randomForest(
     x = train_x,
@@ -166,22 +174,15 @@ rf_final_model <-
     ntree = 3000
   )
 
-rf_final_model
-```
+## Check accuracy ----
+summary(rf_final_model)
 
-## Feature Importance
+# 4. FIGURES ----
 
-A cool feature of random forests is that they are explainable, and it is easy to figure out what variables were the most informative for prediction.
-
-Use the `varImp()` function to extract the variable importance from `rf_final_ model`. The code below will save it as a dataframe for plotting
-
-```{r}
-library(caret)
+## Feature importance ----
 rf_features <- as.data.frame(varImp( rf_final_model))
 ```
 
-The features extracted have a weird format (take a peek at the dataframe to see it) and so the few lines of code below make it plottable.
-```{r}
 ## Rename the column name to rf_imp
 colnames(rf_features) <- "rf_imp"
 
@@ -190,43 +191,38 @@ rf_features$feature <- rownames(rf_features)
 
 ## Selecting only relevant columns for mapping
 features <- rf_features %>% dplyr::select(c(feature, rf_imp))
-```
 
 
-Now, use `ggplot` to plot the variable importance in the `features` dataframe
-The rf_imp should be on the x axis, feature should be on the y axis.
-Use geom_point
-```{r}
-### Plot the feature importance
-plot <- features %>%
-  ggplot(aes(x =  rf_imp, y = feature , color = "#2E86AB")) +
-  # Creates a point for the feature importance
-  geom_point(position = position_dodge(0.5)) 
 
-print(plot)
-```
 
-You can make this a little better with some ggplot arguments. 
-```{r}
-plot +
-  # Connecting line between 0 and the feature
-  geom_linerange(aes(xmin = 0, xmax = rf_imp),
-                 linetype = "solid",
-                 position = position_dodge(.5)) +
-  # Vertical line at 0
-  geom_vline(xintercept = 0,
-             linetype = "solid",
-             color = "grey70") +
-  # Adjust the scale if you need to based on your importance
-  scale_x_continuous(limits = c(-1, 5)) +
-  # Label the x and y axes
-  labs(x = "Importance", y = "Feature") +
-  # Make the theme pretty
-  theme_bw() +
-  theme(legend.position = "none",
-        text = element_text(family = "serif")) +
-  guides(color = guide_legend(title = NULL)) +
-  # Plot them in order of importance
-  scale_y_discrete(limits = features$feature[order(features$rf_imp, decreasing = FALSE)])
-```
+## Other descriptives ----
+## Once you know your important features, examine the distribution of variables on the y axis, and the x-axis is count of 
+
+# LM Reggression Model
+
+## Fit the linear regression model
+my_lm_model <- lm(Sum_Columns ~ adult_age1, adult_education_level3, adult_income5, data = df)
+summary(my_lm_model)
+
+
+# Lasso Regresssion Model
+
+## Load in data
+set.seed(123)
+n <- 100
+p <- 5
+
+y <- df
+
+x <- data.matrix(df)
+
+#perform k-fold cross-validation to find optimal lambda value
+cv_model <- cv.glmnet(x, y, alpha = 1)
+
+#find optimal lambda value that minimizes test MSE
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+#produce plot of test MSE by lambda value
+plot(cv_model) 
 
