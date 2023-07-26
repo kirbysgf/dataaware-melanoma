@@ -1,4 +1,6 @@
 # 1. SETUP ----
+## Default view columns
+rstudioapi::writeRStudioPreference("data_viewer_max_columns", 1000L)
 
 ## Load in libraries ----
 library(tidyverse)
@@ -47,8 +49,6 @@ if (file.exists("my_data.csv")) {
   ## Save my_data_frame as a CSV file
   write_csv(df, path = "my_data.csv")
 }
-
-View(df)
 
 
 # Convert selected variables to factors
@@ -121,17 +121,6 @@ train <- train[sapply(train, function(x) length(unique(x)) > 1)]
 # Check and remove constant columns in the test set
 test <- test[sapply(test, function(x) length(unique(x)) > 1)]
 
-# Get the names of columns in both datasets
-train_cols <- names(train)
-test_cols <- names(test)
-
-# Find the common columns
-common_cols <- intersect(train_cols, test_cols)
-
-# Subset both datasets to include only the common columns
-train <- train[common_cols]
-test <- test[common_cols]
-
 
 # Prepare the data for glmnet ----
 x_train <- model.matrix(Sum_Columns ~ ., data = train)[,-1]
@@ -140,6 +129,19 @@ y_train <- train$Sum_Columns
 x_test <- model.matrix(Sum_Columns ~ ., data = test)[,-1]
 y_test <- test$Sum_Columns
 
+# Get the names of columns in both datasets
+train_cols <- colnames(x_train)
+test_cols <- colnames(x_test)
+
+# Find the common columns
+common_cols <- intersect(train_cols, test_cols)
+
+# Subset both datasets to exclude the common columns
+x_train <- x_train[, (colnames(x_train) %in% common_cols)]
+x_test <- x_test[, (colnames(x_test) %in% common_cols)]
+
+
+# FIT MODEL ----
 # Fit a Poisson model using lasso regression
 fit <- glmnet(x_train, y_train, family = "poisson", alpha = 1)
 
@@ -172,96 +174,13 @@ par(old_par)
 
 
 # Plot the variable coefficients in the final model
-plot_glmnet(fit_best, xvar = "lambda", label = TRUE)
-
+plot(fit_best, xvar = "lambda", label = TRUE)
 
 # Predictions
-
-predicted_values <- predict(fit_best, s = lambda_best, newx = x_test, type = "response")
 actual_values <- y_test
 
 # Plotting the actual vs predicted values
-plot(actual_values, predicted_values, main="Predicted vs Actual",
+plot(actual_values, predictions, main="Predicted vs Actual",
      xlab="Actual", ylab="Predicted", pch=19)
 abline(a=0, b=1, col="red") # adds a y=x line
 
-
-### ARCHIVE----
-
-# ## Split data into training and testing datasets ----
-# df$id <- 1:nrow(df)
-# 
-# train <- df %>% dplyr::sample_frac(0.70)
-# test  <- dplyr::anti_join(df, train, by = 'id')
-# 
-# ## Train_x and test_x
-# train_x <- train %>% select(-c("Sum_Columns", "id"))
-# test_x <- test %>% select(-c("Sum_Columns", "id"))
-# 
-# ## Train_y and test_y
-# train_y <- train %>% select(c("Sum_Columns"))
-# test_y <- test %>% select(c("Sum_Columns"))
-# 
-# ## Convert train_y and test_y to a vector
-# train_y <- unlist(train_y)
-# test_y <- unlist(test_y)
-#       
-# ## Fit initial random forest model with your outcome being the new total variable ----
-# rf_model <- randomForest(
-#   x = train_x,
-#   y = train_y,
-#   xtest = test_x,
-#   ytest = test_y,
-#   importance = TRUE,
-#   ntree = 5000
-# )
-# 
-# ## Tune model ----
-# mtry <- tuneRF(
-#   x = train_x,
-#   y = train_y,
-#   xtest = test_x,
-#   ytest = test_y,
-#   ntreeTry = 5000,
-#   stepFactor = 1.5,
-#   improve = 0.01,
-#   trace = TRUE,
-#   plot = TRUE
-# )
-# 
-# # The code below will save the best value for the mtry and print it out
-# best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
-# print(mtry)
-# print(best.m)
-# 
-# ## Fit final model ----
-# rf_final_model <-
-#   randomForest(
-#     x = train_x,
-#     y = train_y,
-#     mtry = 6,
-#     importance = TRUE,
-#     ntree = 3000
-#   )
-# 
-# ## Check accuracy ----
-# summary(rf_final_model)
-# 
-# # 4. FIGURES ----
-# 
-# ## Feature importance ----
-# rf_features <- as.data.frame(varImp( rf_final_model))
-# 
-# ## Rename the column name to rf_imp
-# colnames(rf_features) <- "rf_imp"
-# 
-# ## convert rownames to column
-# rf_features$feature <- rownames(rf_features)
-# 
-# ## Selecting only relevant columns for mapping
-# features <- rf_features %>% dplyr::select(c(feature, rf_imp))
-# 
-# 
-
-
-## Other descriptives ----
